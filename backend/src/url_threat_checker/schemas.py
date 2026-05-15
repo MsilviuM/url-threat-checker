@@ -21,6 +21,11 @@ class TotpVerifyRequest(BaseModel):
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
+class ResetPasswordRequest(BaseModel):
+    new_password: str = Field(min_length=8, max_length=512)
+    totp_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
 class AuthUser(BaseModel):
     username: str
 

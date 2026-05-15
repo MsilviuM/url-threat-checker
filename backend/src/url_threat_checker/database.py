@@ -60,6 +60,13 @@ class ScanReport(Base):
     )
 
 
+class SiteSettings(Base):
+    __tablename__ = "site_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+
+
 class VirustotalCache(Base):
     __tablename__ = "virustotal_cache"
 

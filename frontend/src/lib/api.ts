@@ -158,6 +158,13 @@ export async function verify2fa(code: string): Promise<{ username: string }> {
   });
 }
 
+export async function resetPassword(newPassword: string, totpCode: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>("/api/v1/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ new_password: newPassword, totp_code: totpCode }),
+  });
+}
+
 export async function logout() {
   return apiFetch<{ ok: boolean }>("/api/v1/auth/logout", {
     method: "POST",
