@@ -1,0 +1,327 @@
+{
+  "version": "20260509071915",
+  "trained_at": "2026-05-09T07:19:15.027408+00:00",
+  "training_command": "uv --project backend run train-model --input data/raw/malicious_phish.csv --processed data/processed/prepared_urls.csv --model models/url_classifier.skops --card models/model_card.json --augmentation data/raw/curated_benign_trusted_urls.csv",
+  "runtime": {
+    "python": "3.13.12",
+    "pandas": "3.0.2",
+    "scikit_learn": "1.8.0",
+    "skops": "unknown"
+  },
+  "dataset": {
+    "input_path": "data/raw/malicious_phish.csv",
+    "input_sha256": "d83ce942075dd63ed4d11560cfdcd9d512caa3d680e292f22cab484e8f074d01",
+    "processed_path": "data/processed/prepared_urls.csv",
+    "base": {
+      "path": "data/raw/malicious_phish.csv",
+      "sha256": "d83ce942075dd63ed4d11560cfdcd9d512caa3d680e292f22cab484e8f074d01",
+      "rows_before_cleaning": 651191,
+      "rows_after_cleaning": 641119,
+      "class_distribution": {
+        "benign": 428080,
+        "defacement": 95308,
+        "phishing": 94086,
+        "malware": 23645
+      }
+    },
+    "augmentation": {
+      "enabled": true,
+      "path": "data/raw/curated_benign_trusted_urls.csv",
+      "sha256": "c2884e1694de414101e003fdb67cb6e210dcdd55a2851383ff75e846ae831296",
+      "rows_before_cleaning": 119,
+      "rows_after_cleaning": 119,
+      "class_distribution": {
+        "benign": 119
+      }
+    },
+    "combined": {
+      "rows_before_deduplication": 641238,
+      "rows_after_deduplication": 641238,
+      "duplicates_removed": 0,
+      "class_distribution": {
+        "benign": 428199,
+        "defacement": 95308,
+        "phishing": 94086,
+        "malware": 23645
+      }
+    },
+    "sample": {
+      "enabled": false
+    },
+    "prepared": {
+      "rows": 640905,
+      "class_distribution": {
+        "benign": 428031,
+        "defacement": 95285,
+        "phishing": 93944,
+        "malware": 23645
+      },
+      "trusted_domain_bias_audit": {
+        "whitelisted_domains": {
+          "rows": 33543,
+          "class_distribution": {
+            "benign": 31543,
+            "phishing": 1751,
+            "malware": 249
+          }
+        },
+        "whitelisted_https_urls": {
+          "rows": 775,
+          "class_distribution": {
+            "phishing": 454,
+            "malware": 202,
+            "benign": 119
+          }
+        },
+        "google_https_urls": {
+          "rows": 668,
+          "class_distribution": {
+            "phishing": 453,
+            "malware": 199,
+            "benign": 16
+          }
+        },
+        "trusted_root_or_www_homepages": {
+          "rows": 22,
+          "class_distribution": {
+            "benign": 22
+          }
+        },
+        "trusted_common_public_pages": {
+          "rows": 24904,
+          "class_distribution": {
+            "benign": 24281,
+            "phishing": 621,
+            "malware": 2
+          }
+        },
+        "trusted_user_generated_services": {
+          "rows": 1363,
+          "class_distribution": {
+            "benign": 579,
+            "phishing": 569,
+            "malware": 215
+          }
+        }
+      }
+    }
+  },
+  "feature_extractor_version": "2026-05-09-trusted-context-v2",
+  "feature_names": [
+    "url_length",
+    "normalized_url_length",
+    "domain_length",
+    "domain_dot_count",
+    "subdomain_count",
+    "has_https",
+    "has_http",
+    "scheme_missing",
+    "digit_ratio",
+    "query_param_count",
+    "query_length",
+    "path_length",
+    "suspicious_keyword_count",
+    "is_whitelisted",
+    "is_trusted_root_or_www_homepage",
+    "is_trusted_search_or_common_public_page",
+    "is_trusted_user_generated_service",
+    "has_ip_address",
+    "has_at_symbol",
+    "has_hyphen_in_domain",
+    "has_punycode",
+    "has_risky_extension",
+    "uses_url_shortener",
+    "url_entropy"
+  ],
+  "training_strategy": {
+    "augmentation_weight": 200.0,
+    "augmentation_weight_note": "Curated rows are weighted during fitting so rare hand-reviewed trusted HTTPS corrections are visible to the model without modifying the raw dataset."
+  },
+  "labels": [
+    "benign",
+    "defacement",
+    "malware",
+    "phishing"
+  ],
+  "dataset_rows": 640905,
+  "class_distribution": {
+    "benign": 428031,
+    "defacement": 95285,
+    "phishing": 93944,
+    "malware": 23645
+  },
+  "metrics": {
+    "accuracy": 0.9346939093937479,
+    "macro_f1": 0.9153147348589169,
+    "weighted_f1": 0.9362248252316636,
+    "classification_report": {
+      "benign": {
+        "precision": 0.9798394941634241,
+        "recall": 0.9413125248230264,
+        "f1-score": 0.9601896976990812,
+        "support": 85606.0
+      },
+      "defacement": {
+        "precision": 0.9338457723778825,
+        "recall": 0.9881408406359867,
+        "f1-score": 0.9602264035490286,
+        "support": 19057.0
+      },
+      "malware": {
+        "precision": 0.9659955257270694,
+        "recall": 0.9130894480862761,
+        "f1-score": 0.9387976954016741,
+        "support": 4729.0
+      },
+      "phishing": {
+        "precision": 0.754670045996433,
+        "recall": 0.8557666719889296,
+        "f1-score": 0.8020451427858836,
+        "support": 18789.0
+      },
+      "accuracy": 0.9346939093937479,
+      "macro avg": {
+        "precision": 0.9085877095662022,
+        "recall": 0.9245773713835548,
+        "f1-score": 0.9153147348589169,
+        "support": 128181.0
+      },
+      "weighted avg": {
+        "precision": 0.93948500134146,
+        "recall": 0.9346939093937479,
+        "f1-score": 0.9362248252316636,
+        "support": 128181.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        80582,
+        93,
+        38,
+        4893
+      ],
+      [
+        89,
+        18831,
+        25,
+        112
+      ],
+      [
+        55,
+        134,
+        4318,
+        222
+      ],
+      [
+        1514,
+        1107,
+        89,
+        16079
+      ]
+    ]
+  },
+  "feature_importances": [
+    {
+      "feature": "scheme_missing",
+      "importance": 0.11827961102510358
+    },
+    {
+      "feature": "has_http",
+      "importance": 0.11271047371826334
+    },
+    {
+      "feature": "path_length",
+      "importance": 0.10124165017768932
+    },
+    {
+      "feature": "digit_ratio",
+      "importance": 0.0874749119144557
+    },
+    {
+      "feature": "has_ip_address",
+      "importance": 0.06327389161293698
+    },
+    {
+      "feature": "domain_dot_count",
+      "importance": 0.05667610628496252
+    },
+    {
+      "feature": "url_length",
+      "importance": 0.05381850440568744
+    },
+    {
+      "feature": "has_risky_extension",
+      "importance": 0.05336659254237279
+    },
+    {
+      "feature": "normalized_url_length",
+      "importance": 0.052956191070673723
+    },
+    {
+      "feature": "domain_length",
+      "importance": 0.051194599658097216
+    },
+    {
+      "feature": "subdomain_count",
+      "importance": 0.048355595416368
+    },
+    {
+      "feature": "url_entropy",
+      "importance": 0.04621967748141505
+    },
+    {
+      "feature": "has_https",
+      "importance": 0.035292683885851474
+    },
+    {
+      "feature": "query_length",
+      "importance": 0.033140097784077595
+    },
+    {
+      "feature": "query_param_count",
+      "importance": 0.03061820389380031
+    },
+    {
+      "feature": "suspicious_keyword_count",
+      "importance": 0.023956491941316858
+    },
+    {
+      "feature": "is_whitelisted",
+      "importance": 0.013178023939897376
+    },
+    {
+      "feature": "is_trusted_search_or_common_public_page",
+      "importance": 0.009798480742564678
+    },
+    {
+      "feature": "has_hyphen_in_domain",
+      "importance": 0.0056891865432674394
+    },
+    {
+      "feature": "has_at_symbol",
+      "importance": 0.0010253855224161127
+    },
+    {
+      "feature": "is_trusted_user_generated_service",
+      "importance": 0.0009743204359900128
+    },
+    {
+      "feature": "is_trusted_root_or_www_homepage",
+      "importance": 0.0005361559580995857
+    },
+    {
+      "feature": "uses_url_shortener",
+      "importance": 0.00017816815834219567
+    },
+    {
+      "feature": "has_punycode",
+      "importance": 4.499588635070699e-05
+    }
+  ],
+  "limitations": [
+    "The model analyzes URL text only; it does not inspect page content.",
+    "VirusTotal is an external reference, not absolute ground truth.",
+    "Safe whitelisted domains can still be overridden by strong external malicious detections.",
+    "New attack patterns may require retraining and feature updates."
+  ]
+}
