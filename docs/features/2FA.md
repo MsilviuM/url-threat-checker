@@ -316,22 +316,88 @@ See `docs/demo-setup.md` for the full runbook.
 2FA introduces no special deployment changes — `pyotp` and `qrcode` are
 ordinary dependencies installed by `uv sync` before the first run.
 
-## 11. What is NOT yet implemented
+## 11. Hardening controls now in place
 
-Stated as observed gaps, not as critique:
+Each of the gaps flagged in earlier revisions of this document is addressed.
+What was previously enumerated as "not yet implemented" now reads:
 
-- **No backup / recovery codes.** Losing the authenticator app means relying on the unauthenticated reset-password flow — which itself needs the TOTP secret. If the authenticator is lost, the only fallback is operator access to `backend/.env` plus a database wipe of the `site_settings.admin_password_hash` row.
-- **No rate limiting on 2FA verification.** `verify-2fa` and `reset-password` have no per-IP or per-cookie throttle in `auth.py`. Note: `.env.example` line 14 declares `LOGIN_RATE_LIMIT_PER_MINUTE=5`, but `Settings` in `config.py` does not define a corresponding field and `auth.py` does not reference any rate limiter.
-- **No audit log.** Successful and failed logins, 2FA verifications, and password resets are not recorded. The `database.py` schema has no `audit_events` table (and `reset_database_schema` explicitly drops one if it ever existed — `database.py:106`).
-- **No "remember this device" / trusted device.** Every login requires a fresh TOTP code; the pending cookie is single-use and bound to a 5-minute window.
-- **No in-app enrollment UI.** Enrollment is CLI-only via `uv run setup-2fa`. There is no `/settings` page or modal that displays a QR or rotates the secret. Once `TOTP_SECRET` is set, no UI element acknowledges it.
-- **No per-user 2FA.** There is one admin account (`settings.admin_username`, default `"admin"`). The TOTP secret is global to the deployment.
-- **No automated test coverage for 2FA endpoints.** `backend/tests/test_api.py` does not exercise `/api/v1/auth/verify-2fa` or `/api/v1/auth/reset-password`. The `login` helper at `test_api.py:45-50` only covers the no-2FA branch — all tests instantiate `Settings(virustotal_api_key=None)` (`test_api.py:26`), which leaves `totp_secret` at its default `None`. No test asserts the `requires_2fa: true` branch, the pending-cookie issuance, the `valid_window=1` behavior, or the `type: "pending_2fa"` rejection in `verify_session_token`.
-- **No validation of `TOTP_SECRET` format at startup.** `Settings` accepts any string. An invalid base32 value would only fail at first call to `pyotp.TOTP(...).verify(...)`, not at app boot.
-- **No session revocation.** `logout` deletes the client-side cookie but the signed token remains valid until its `exp` if it were replayed.
-- **Pending cookie is not bound to the password attempt.** `_create_pending_token` only encodes `sub`. There is no nonce or correlation to the `LoginRequest` that produced it. The token cannot be replayed across deployments because `session_secret` differs, but within one deployment a stolen `utc_pending` cookie could be used until it expires.
-- **`totp_issuer` setting is dead code.** Declared at `config.py:37` but the setup script hardcodes `"URL Threat Checker"` (`setup_2fa.py:10`). Changing `TOTP_ISSUER` in the env has no observable effect.
-- **No CSRF token on auth POSTs.** Protection currently relies on `SameSite=Lax` cookies and the origin guard mentioned in `test_api.py:244-258` (which lives in middleware, not in `auth.py`).
+- **Rate limiting (slowapi)** — `/login`, `/verify-2fa`, and `/reset-password`
+  carry per-IP token-bucket limits, configurable via env vars
+  `AUTH_RATE_LIMIT_LOGIN` (default `5/minute`), `AUTH_RATE_LIMIT_VERIFY_2FA`
+  (default `5/minute`), `AUTH_RATE_LIMIT_RESET_PASSWORD` (default `3/hour`).
+  Limit values are read from `Settings` at module import; tune via env then
+  restart. `_client_ip` honours `X-Forwarded-For` only when
+  `APP_ENV=production` to prevent header spoofing in dev. Storage is in-memory
+  (single-worker uvicorn); a Redis backend can be swapped in for multi-worker
+  deployments.
+- **TOTP replay protection** — `_verify_totp` persists the last-accepted
+  counter (TOTP step number = `time.time() // 30`) in
+  `site_settings.last_totp_counter` and refuses any code whose candidate
+  counter is ≤ the stored one. Combined with `valid_window=1`, this gives the
+  standard ±30 s tolerance while making each 6-digit code single-use within
+  its window.
+- **Pending cookie single-use (JTI)** — every `/login` issuing a pending
+  cookie generates a fresh UUID `jti` and embeds it in the signed payload.
+  `/verify-2fa` rejects any pending cookie whose `jti` is already recorded in
+  the `consumed_pending:*` set; on success the JTI is added to that set with
+  a TTL equal to the pending cookie's `exp`. Expired entries are pruned
+  lazily on each consume.
+- **Session revocation on password reset** — `site_settings.session_epoch`
+  is bumped atomically with the new password hash. Every minted session token
+  carries the epoch at issue time; `current_admin` reads the current epoch
+  (5-second cache) and rejects any session whose embedded epoch is stale.
+- **Recovery codes** — `setup-2fa` generates 10 codes (`RECOVERY_CODES_COUNT`,
+  default 10) of the form `xxxx-xxxx-xxxx-xxxx` (64 bits of entropy), stores
+  one pbkdf2_sha256 hash per row under `recovery_code:<sha256-prefix>`, and
+  prints the plaintext codes once. `/reset-password` accepts either a TOTP
+  code or a recovery code in the `verification_code` field. Codes are
+  race-free single-use: the verify+delete happens in one transaction and the
+  loser of a race sees rowcount 0.
+- **Audit logging** — stdlib `logging` to stdout, namespace
+  `url_threat_checker.auth`, JSON-extra formatter at `main._JsonExtraFormatter`.
+  `_audit(request, event, outcome, username)` records every login attempt,
+  TOTP verify, password reset, and rate-limit hit with `ip`, `user_agent`,
+  `event`, `outcome`, `username`. Render/Docker friendly — no DB writes.
+- **TOTP secret runtime validation** — `smoke_test_totp_secret` runs in the
+  app lifespan; an invalid base32 value logs a warning but does not block
+  startup. At request time, `_verify_totp` and `/verify-2fa` re-check the
+  secret and return 503 "2FA temporarily unavailable" — fail-closed posture
+  so a misconfigured secret can't downgrade authentication.
+- **`totp_issuer` wired up** — `setup_2fa.py` reads `settings.totp_issuer`
+  for the provisioning URI; the dead constant string is gone.
+- **Logout clears pending cookie** — `/logout` deletes both `utc_session` and
+  `utc_pending`, so a half-finished 2FA flow does not leave a stale cookie.
+- **`/change-password` and `/reset-password` are separate endpoints.**
+  `/reset-password` is the unauthenticated "forgot my password" flow, gated on
+  TOTP or a recovery code. `/change-password` is the authenticated rotation
+  flow — requires a valid session AND the current password. Both bump the
+  session epoch (invalidating other devices); `/change-password` additionally
+  rotates the caller's session token in the same response so they stay logged
+  in here. The UI hook for `/change-password` is `/settings`.
+- **Test coverage** — `backend/tests/test_api.py` exercises the 2FA-on
+  branch end-to-end: pending cookie issuance, valid/invalid TOTP, replay
+  rejection (both the TOTP counter and the JTI single-use cases), recovery
+  code happy path + replay, all three rate limits, invalid TOTP secret → 503,
+  session epoch revocation on reset, audit log emission, logout cookie
+  cleanup, and the `epoch` claim shape on session tokens.
+
+What is **still** explicitly out of scope (single-admin uni-demo posture):
+
+- Per-user 2FA — the deployment is single-admin by design.
+- In-app enrollment UI — enrollment remains CLI-only (`uv run setup-2fa`).
+- "Remember this device" / trusted-device cookies — every login goes
+  through TOTP when `TOTP_SECRET` is set.
+- CSRF tokens on auth POSTs — `SameSite=Lax` cookies plus the origin guard
+  in `main.request_guard` (lines 67–73) carry that defense.
+- DB-backed audit table with a viewer page — stdout logging is the chosen
+  medium; uvicorn's stdout is captured by Render/Docker tooling.
+
+### Emergency recovery (lost authenticator AND all recovery codes)
+
+The escape hatch for total lockout is documented in
+[`docs/demo-setup.md`](../demo-setup.md): stop the demo, delete the
+`recovery_code:%` and `last_totp_counter` rows from `site_settings`, re-run
+`uv run setup-2fa`, update `TOTP_SECRET` in `backend/.env`, and restart.
 
 ## 12. File / line citation table
 

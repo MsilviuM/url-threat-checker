@@ -35,6 +35,12 @@ class Settings(BaseSettings):
 
     totp_secret: str | None = None
     totp_issuer: str = "URL Threat Checker"
+    recovery_codes_count: int = 10
+
+    auth_rate_limit_login: str = "5/minute"
+    auth_rate_limit_verify_2fa: str = "5/minute"
+    auth_rate_limit_reset_password: str = "3/hour"
+    auth_rate_limit_change_password: str = "5/minute"
 
     virustotal_api_key: str | None = None
     virustotal_cache_ttl_hours: int = 24

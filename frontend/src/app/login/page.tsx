@@ -22,17 +22,17 @@ export default function LoginPage() {
   // reset step
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [resetCode, setResetCode] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const totpRef = useRef<HTMLInputElement>(null);
-  const resetCodeRef = useRef<HTMLInputElement>(null);
+  const verificationCodeRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (step === "totp") totpRef.current?.focus();
-    if (step === "reset") resetCodeRef.current?.focus();
+    if (step === "reset") verificationCodeRef.current?.focus();
   }, [step]);
 
   function goTo(next: Step) {
@@ -79,12 +79,12 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      await resetPassword(newPassword, resetCode);
+      await resetPassword(newPassword, verificationCode);
       goTo("reset-done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reset failed.");
-      setResetCode("");
-      resetCodeRef.current?.focus();
+      setVerificationCode("");
+      verificationCodeRef.current?.focus();
     } finally {
       setLoading(false);
     }
@@ -102,7 +102,7 @@ export default function LoginPage() {
           </div>
           <button
             className="focus-ring ui-button-primary h-10 w-full px-4"
-            onClick={() => { setNewPassword(""); setConfirmPassword(""); setResetCode(""); goTo("password"); }}
+            onClick={() => { setNewPassword(""); setConfirmPassword(""); setVerificationCode(""); goTo("password"); }}
           >
             <LogIn className="size-4" />
             Back to login
@@ -123,7 +123,7 @@ export default function LoginPage() {
               <h1 className="text-2xl font-semibold ui-heading">Reset Password</h1>
             </div>
             <p className="text-sm ui-muted">
-              Enter your new password and confirm with Google Authenticator.
+              Enter your new password and confirm with a Google Authenticator code or a one-time recovery code.
             </p>
           </div>
           <form onSubmit={submitReset} className="space-y-4">
@@ -151,22 +151,28 @@ export default function LoginPage() {
               />
             </label>
             <label className="block text-sm font-medium ui-secondary">
-              Google Authenticator code
+              Authentication or recovery code
               <input
-                ref={resetCodeRef}
-                className="focus-ring ui-input mt-1 rounded-md px-3 py-2 text-center text-xl tracking-[0.4em]"
-                value={resetCode}
-                onChange={(e) => setResetCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                inputMode="numeric"
+                ref={verificationCodeRef}
+                className="focus-ring ui-input mt-1 rounded-md px-3 py-2 font-mono"
+                value={verificationCode}
+                onChange={(e) =>
+                  setVerificationCode(e.target.value.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 19))
+                }
                 autoComplete="one-time-code"
-                placeholder="000000"
-                maxLength={6}
+                placeholder="000000 or xxxx-xxxx-xxxx-xxxx"
+                maxLength={19}
               />
             </label>
             {error ? <p className="ui-error rounded-md px-3 py-2 text-sm">{error}</p> : null}
             <button
               className="focus-ring ui-button-primary h-10 w-full px-4 disabled:opacity-60"
-              disabled={loading || resetCode.length !== 6 || !newPassword || !confirmPassword}
+              disabled={
+                loading ||
+                verificationCode.length < 6 ||
+                !newPassword ||
+                !confirmPassword
+              }
             >
               <KeyRound className="size-4" />
               {loading ? "Resetting…" : "Reset password"}

@@ -11,6 +11,7 @@ const navItems = [
   { href: "/scans/new", label: "New Scan" },
   { href: "/reports", label: "Reports" },
   { href: "/model", label: "Model" },
+  { href: "/settings", label: "Settings" },
 ];
 
 function navClass(pathname: string, href: string) {

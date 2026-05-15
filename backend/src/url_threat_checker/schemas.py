@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 VerdictValue = Literal["safe", "suspicious", "dangerous", "unknown"]
 PredictionValue = Literal["benign", "phishing", "malware", "defacement", "unknown"]
@@ -21,9 +21,26 @@ class TotpVerifyRequest(BaseModel):
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=512)
+    new_password: str = Field(min_length=8, max_length=512)
+
+
 class ResetPasswordRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=512)
-    totp_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    verification_code: str = Field(min_length=6, max_length=64, pattern=r"^[\w\-]{6,64}$")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_legacy_totp_code(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "totp_code" in data and "verification_code" not in data:
+            data = {**data, "verification_code": data["totp_code"]}
+        return data
+
+
+class ResetPasswordResponse(BaseModel):
+    ok: bool
+    recovery_codes_remaining: int
 
 
 class AuthUser(BaseModel):

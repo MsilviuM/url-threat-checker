@@ -158,10 +158,25 @@ export async function verify2fa(code: string): Promise<{ username: string }> {
   });
 }
 
-export async function resetPassword(newPassword: string, totpCode: string): Promise<{ ok: boolean }> {
-  return apiFetch<{ ok: boolean }>("/api/v1/auth/reset-password", {
+export type ResetPasswordResult = { ok: boolean; recovery_codes_remaining: number };
+
+export async function resetPassword(
+  newPassword: string,
+  verificationCode: string,
+): Promise<ResetPasswordResult> {
+  return apiFetch<ResetPasswordResult>("/api/v1/auth/reset-password", {
     method: "POST",
-    body: JSON.stringify({ new_password: newPassword, totp_code: totpCode }),
+    body: JSON.stringify({ new_password: newPassword, verification_code: verificationCode }),
+  });
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>("/api/v1/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   });
 }
 

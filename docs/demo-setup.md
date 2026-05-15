@@ -69,7 +69,7 @@ Create `backend/.env` (gitignored). Generate the secrets first:
 cd backend
 uv sync
 uv run hash-password   # prompts for a password; outputs the pbkdf2 hash
-uv run setup-2fa       # (OPTIONAL) prints TOTP_SECRET + a QR code
+uv run setup-2fa       # (OPTIONAL) prints TOTP_SECRET + QR + 10 recovery codes
 ```
 
 Then `backend/.env`:
@@ -85,11 +85,24 @@ VIRUSTOTAL_API_KEY=<your VT API key>
 ```
 
 **2FA is optional.** If `TOTP_SECRET` is empty, the login flow is password-only
-and the `/api/v1/auth/verify-2fa` and `/api/v1/auth/reset-password` endpoints
-become inert (return 400). Useful when the demo is focused on HTTPS-only and
-the teacher doesn't need to see the TOTP flow. The frontend "Forgot password?"
-link still appears in the UI but will return 400 if clicked — hide it later if
-that's a concern.
+and the `/api/v1/auth/verify-2fa` endpoint returns 400. `/api/v1/auth/reset-password`
+still works without TOTP if recovery codes were generated (they're decoupled from
+the TOTP secret — `setup-2fa` populates the codes regardless).
+
+**Hardening defaults that ship enabled** (configurable in `backend/.env`):
+
+```ini
+AUTH_RATE_LIMIT_LOGIN=5/minute
+AUTH_RATE_LIMIT_VERIFY_2FA=5/minute
+AUTH_RATE_LIMIT_RESET_PASSWORD=3/hour
+RECOVERY_CODES_COUNT=10
+```
+
+Rate-limit excess returns 429. Audit events for every login, 2FA verification,
+and password reset are written to stdout (uvicorn's log stream) with `ip`,
+`user_agent`, `event`, `outcome`, and (where applicable) `username`. Session
+tokens carry an `epoch` claim that is bumped on every password reset, so
+existing sessions are invalidated when the password changes.
 
 Notes:
 
@@ -198,6 +211,11 @@ the script kills all three children.
     silently (proves `Secure=True` is in effect — cookies are not sent over
     plain HTTP).
 
+14. While logged in, click **Settings** in the nav → submit a password change
+    with the current password and a new one (≥ 8 chars). Expect the inline
+    success banner. `/me` continues to work without a fresh login (the session
+    token was rotated). A second logged-in browser, if any, is now signed out.
+
 Optional smoke test that catches an origin-guard misconfiguration:
 
 ```bash
@@ -210,6 +228,35 @@ curl -i -X POST https://<reserved-name>.ngrok-free.app/backend/api/v1/auth/login
 Expected: `HTTP 403` with `{"detail":"Request origin is not allowed."}`.
 
 ---
+
+## Emergency recovery — lost authenticator AND all recovery codes
+
+If you've genuinely lost your TOTP authenticator AND used or lost every
+recovery code printed by `uv run setup-2fa`, the only way back in is a
+direct database edit. The 2FA state lives in the `site_settings` table.
+
+```bash
+# 1. Stop the demo
+Ctrl-C
+
+# 2. Wipe the 2FA state from the local SQLite DB
+sqlite3 backend/var/url_threat_checker.db \
+  "DELETE FROM site_settings WHERE key LIKE 'recovery_code:%' \
+                                OR key = 'last_totp_counter' \
+                                OR key LIKE 'consumed_pending:%';"
+
+# 3. Generate a fresh TOTP secret and a new set of recovery codes
+cd backend && uv run setup-2fa
+
+# 4. Paste the new TOTP_SECRET into backend/.env (replacing the old one)
+# 5. Re-scan the QR with your authenticator app
+# 6. Save the new recovery codes somewhere safe
+# 7. Restart
+./scripts/demo.sh
+```
+
+The admin password hash row (`site_settings.admin_password_hash`) is left
+alone, so the password you set via `uv run hash-password` keeps working.
 
 ## Troubleshooting
 
