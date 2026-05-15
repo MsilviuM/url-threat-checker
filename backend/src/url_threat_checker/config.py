@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     model_path: str = str(PROJECT_ROOT / "models" / "url_classifier.skops")
     model_card_path: str = str(PROJECT_ROOT / "models" / "model_card.json")
 
+    totp_secret: str | None = None
+    totp_issuer: str = "URL Threat Checker"
+
     virustotal_api_key: str | None = None
     virustotal_cache_ttl_hours: int = 24
     virustotal_submit_unknown: bool = False

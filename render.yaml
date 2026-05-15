@@ -20,6 +20,8 @@ services:
         value: admin
       - key: ADMIN_PASSWORD_HASH
         value: "pbkdf2_sha256$260000$dXJsLXRocmVhdC1kZW1vLXNhbHQ$9y9jpBrb-hPXQU35h0SLyc2XOU7gFxVXFVmqFWNtuc4"
+      - key: TOTP_SECRET
+        sync: false
       - key: VIRUSTOTAL_API_KEY
         sync: false
 

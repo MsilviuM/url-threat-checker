@@ -12,6 +12,15 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=512)
 
 
+class LoginResponse(BaseModel):
+    requires_2fa: bool = False
+    username: str | None = None
+
+
+class TotpVerifyRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
 class AuthUser(BaseModel):
     username: str
 

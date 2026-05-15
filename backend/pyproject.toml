@@ -13,6 +13,8 @@ dependencies = [
   "scikit-learn>=1.8.0",
   "skops>=0.13.0",
   "psycopg2-binary>=2.9",
+  "pyotp>=2.9",
+  "qrcode>=8.0",
   "sqlalchemy>=2.0.49",
   "tldextract>=5.3.0",
   "uvicorn>=0.38.0",
@@ -32,6 +34,7 @@ seed-demo = "url_threat_checker.scripts.seed_demo:main"
 reset-demo = "url_threat_checker.scripts.reset_demo:main"
 validate-virustotal = "url_threat_checker.scripts.validate_virustotal:main"
 create-submission-bundle = "url_threat_checker.scripts.create_submission_bundle:main"
+setup-2fa = "url_threat_checker.scripts.setup_2fa:main"
 
 [tool.uv]
 package = true

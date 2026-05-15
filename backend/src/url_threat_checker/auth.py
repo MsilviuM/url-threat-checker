@@ -6,12 +6,16 @@ import os
 import time
 from typing import Annotated, Any
 
+import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from url_threat_checker.config import Settings, get_settings
-from url_threat_checker.schemas import AuthUser, LoginRequest
+from url_threat_checker.schemas import AuthUser, LoginRequest, LoginResponse, TotpVerifyRequest
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+_PENDING_COOKIE = "utc_pending"
+_PENDING_TTL = 300  # 5 minutes
 
 
 def _b64encode(value: bytes) -> str:
@@ -43,19 +47,14 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hmac.compare_digest(actual, expected)
 
 
-def create_session_token(username: str, secret: str, ttl_seconds: int) -> str:
-    payload = {
-        "sub": username,
-        "iat": int(time.time()),
-        "exp": int(time.time()) + ttl_seconds,
-    }
+def _make_token(payload: dict[str, Any], secret: str) -> str:
     payload_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     encoded_payload = _b64encode(payload_bytes)
     signature = hmac.new(secret.encode("utf-8"), encoded_payload.encode("ascii"), hashlib.sha256)
     return f"{encoded_payload}.{_b64encode(signature.digest())}"
 
 
-def verify_session_token(token: str | None, secret: str) -> dict[str, Any] | None:
+def _decode_token(token: str | None, secret: str) -> dict[str, Any] | None:
     if not token or "." not in token:
         return None
     encoded_payload, encoded_signature = token.split(".", 1)
@@ -69,6 +68,63 @@ def verify_session_token(token: str | None, secret: str) -> dict[str, Any] | Non
     if int(payload.get("exp", 0)) < int(time.time()):
         return None
     return payload
+
+
+def create_session_token(username: str, secret: str, ttl_seconds: int) -> str:
+    return _make_token(
+        {"sub": username, "iat": int(time.time()), "exp": int(time.time()) + ttl_seconds},
+        secret,
+    )
+
+
+def verify_session_token(token: str | None, secret: str) -> dict[str, Any] | None:
+    payload = _decode_token(token, secret)
+    if not payload:
+        return None
+    if payload.get("type") == "pending_2fa":
+        return None  # pending tokens must not be used as full sessions
+    return payload
+
+
+def _create_pending_token(username: str, secret: str) -> str:
+    return _make_token(
+        {
+            "sub": username,
+            "type": "pending_2fa",
+            "iat": int(time.time()),
+            "exp": int(time.time()) + _PENDING_TTL,
+        },
+        secret,
+    )
+
+
+def _verify_pending_token(token: str | None, secret: str) -> dict[str, Any] | None:
+    payload = _decode_token(token, secret)
+    if not payload or payload.get("type") != "pending_2fa":
+        return None
+    return payload
+
+
+def _set_session_cookie(response: Response, token: str, settings: Settings) -> None:
+    response.set_cookie(
+        settings.session_cookie_name,
+        token,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=settings.app_env == "production",
+        max_age=settings.session_ttl_seconds,
+    )
+
+
+def _clear_session_cookie(response: Response, settings: Settings) -> None:
+    response.delete_cookie(
+        settings.session_cookie_name,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=settings.app_env == "production",
+    )
 
 
 def current_admin(
@@ -85,33 +141,81 @@ def current_admin(
     return settings.admin_username
 
 
-@router.post("/login", response_model=AuthUser)
+@router.post("/login", response_model=LoginResponse)
 def login(
     payload: LoginRequest,
     response: Response,
     settings: Annotated[Settings, Depends(get_settings)],
-) -> AuthUser:
+) -> LoginResponse:
     if payload.username != settings.admin_username or not verify_password(
         payload.password,
         settings.admin_password_hash,
     ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials.")
 
+    if settings.totp_secret:
+        pending = _create_pending_token(settings.admin_username, settings.session_secret)
+        response.set_cookie(
+            _PENDING_COOKIE,
+            pending,
+            path="/",
+            httponly=True,
+            samesite="lax",
+            secure=settings.app_env == "production",
+            max_age=_PENDING_TTL,
+        )
+        return LoginResponse(requires_2fa=True)
+
     token = create_session_token(
         username=settings.admin_username,
         secret=settings.session_secret,
         ttl_seconds=settings.session_ttl_seconds,
     )
-    response.set_cookie(
-        settings.session_cookie_name,
-        token,
+    _set_session_cookie(response, token, settings)
+    return LoginResponse(username=settings.admin_username)
+
+
+@router.post("/verify-2fa", response_model=AuthUser)
+def verify_2fa(
+    payload: TotpVerifyRequest,
+    request: Request,
+    response: Response,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AuthUser:
+    pending = _verify_pending_token(
+        request.cookies.get(_PENDING_COOKIE),
+        settings.session_secret,
+    )
+    if not pending:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. Please log in again.",
+        )
+
+    if not settings.totp_secret:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA is not configured.")
+
+    totp = pyotp.TOTP(settings.totp_secret)
+    if not totp.verify(payload.code, valid_window=1):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication code.",
+        )
+
+    response.delete_cookie(
+        _PENDING_COOKIE,
         path="/",
         httponly=True,
         samesite="lax",
         secure=settings.app_env == "production",
-        max_age=settings.session_ttl_seconds,
     )
-    return AuthUser(username=settings.admin_username)
+    token = create_session_token(
+        username=pending["sub"],
+        secret=settings.session_secret,
+        ttl_seconds=settings.session_ttl_seconds,
+    )
+    _set_session_cookie(response, token, settings)
+    return AuthUser(username=pending["sub"])
 
 
 @router.post("/logout")
@@ -119,13 +223,7 @@ def logout(
     response: Response,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, bool]:
-    response.delete_cookie(
-        settings.session_cookie_name,
-        path="/",
-        httponly=True,
-        samesite="lax",
-        secure=settings.app_env == "production",
-    )
+    _clear_session_cookie(response, settings)
     return {"ok": True}
 
 

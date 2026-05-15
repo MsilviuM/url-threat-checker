@@ -139,10 +139,22 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return response.json() as Promise<T>;
 }
 
-export async function login(username: string, password: string) {
-  return apiFetch<{ username: string }>("/api/v1/auth/login", {
+export type LoginResult = {
+  requires_2fa: boolean;
+  username?: string;
+};
+
+export async function login(username: string, password: string): Promise<LoginResult> {
+  return apiFetch<LoginResult>("/api/v1/auth/login", {
     method: "POST",
     body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function verify2fa(code: string): Promise<{ username: string }> {
+  return apiFetch<{ username: string }>("/api/v1/auth/verify-2fa", {
+    method: "POST",
+    body: JSON.stringify({ code }),
   });
 }
 
