@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from url_threat_checker.config import Settings, get_settings
+from url_threat_checker.config import DEFAULT_ADMIN_PASSWORD_HASH, Settings, get_settings
 from url_threat_checker.database import Base, ScanReport, get_db
 from url_threat_checker.main import app
 from url_threat_checker.scripts.reset_demo import reset_demo_session
@@ -23,7 +23,12 @@ def api_client_context(
     )
     Base.metadata.create_all(bind=engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-    test_settings = settings or Settings(virustotal_api_key=None)
+    test_settings = settings or Settings(
+        _env_file=None,
+        virustotal_api_key=None,
+        admin_password_hash=DEFAULT_ADMIN_PASSWORD_HASH,
+        totp_secret=None,
+    )
 
     def override_get_db() -> Iterator[Session]:
         db = session_factory()
@@ -117,7 +122,7 @@ def test_login_cookie_allows_authenticated_requests_and_logout() -> None:
             json={"username": "admin", "password": "admin123"},
         )
         assert login_response.status_code == 200
-        assert login_response.json() == {"username": "admin"}
+        assert login_response.json() == {"requires_2fa": False, "username": "admin"}
         assert "utc_session" in client.cookies
 
         me = client.get("/api/v1/auth/me")
