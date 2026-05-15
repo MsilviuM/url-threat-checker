@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Activity, AlertTriangle, BarChart3, CheckCircle2, HelpCircle, ShieldAlert } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  CheckCircle2,
+  HelpCircle,
+  MessageCircle,
+  ShieldAlert,
+} from "lucide-react";
 import { Panel } from "@/components/panel";
 import { VerdictBadge } from "@/components/verdict-badge";
 import { getStats, listScans, ScanSummary, Stats } from "@/lib/api";
@@ -62,6 +70,26 @@ export default function DashboardPage() {
           );
         })}
       </div>
+
+      <Panel>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="size-5 text-[var(--text-secondary)]" />
+            <h2 className="font-semibold ui-heading">Telegram Automation</h2>
+          </div>
+          <Link
+            href="/reports?source=telegram"
+            className="text-sm font-medium text-[var(--brand-300)] hover:text-[var(--brand-400)]"
+          >
+            View Telegram reports
+          </Link>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <ComparisonValue label="Telegram scans" value={stats?.source_counts.telegram ?? 0} />
+          <ComparisonValue label="Risky Telegram scans" value={stats?.telegram_risky ?? 0} />
+          <ComparisonValue label="Manual scans" value={stats?.source_counts.manual ?? 0} />
+        </div>
+      </Panel>
 
       <Panel>
         <div className="flex flex-wrap items-start justify-between gap-4">

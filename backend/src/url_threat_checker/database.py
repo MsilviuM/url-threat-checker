@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Float, Integer, String, Text, create_engine, text
+from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from url_threat_checker.config import get_settings
@@ -67,6 +67,32 @@ class SiteSettings(Base):
     value: Mapped[str] = mapped_column(Text)
 
 
+class IntegrationEvent(Base):
+    __tablename__ = "integration_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "platform",
+            "external_event_id",
+            name="uq_integration_events_platform_external_event_id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    platform: Mapped[str] = mapped_column(String(64), index=True)
+    external_event_id: Mapped[str] = mapped_column(String(128))
+    external_chat_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    external_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="received", index=True)
+    scan_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=now_utc,
+        index=True,
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class VirustotalCache(Base):
     __tablename__ = "virustotal_cache"
 
@@ -104,6 +130,7 @@ def reset_database_schema() -> None:
     Base.metadata.drop_all(bind=engine)
     with engine.begin() as connection:
         connection.execute(text("DROP TABLE IF EXISTS audit_events"))
+        connection.execute(text("DROP TABLE IF EXISTS integration_events"))
         connection.execute(text("DROP TABLE IF EXISTS model_runs"))
     Base.metadata.create_all(bind=engine)
 

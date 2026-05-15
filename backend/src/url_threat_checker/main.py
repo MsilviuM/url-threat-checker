@@ -14,6 +14,7 @@ from url_threat_checker import auth, scanner
 from url_threat_checker.auth import smoke_test_totp_secret
 from url_threat_checker.config import get_settings
 from url_threat_checker.database import initialize_database
+from url_threat_checker.telegram.router import router as telegram_router
 
 
 class _JsonExtraFormatter(logging.Formatter):
@@ -122,6 +123,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(scanner.router)
+    app.include_router(telegram_router)
     return app
 
 

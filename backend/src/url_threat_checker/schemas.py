@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 
 VerdictValue = Literal["safe", "suspicious", "dangerous", "unknown"]
 PredictionValue = Literal["benign", "phishing", "malware", "defacement", "unknown"]
+SourceFilterValue = Literal["all", "manual", "telegram", "automation"]
 
 
 class LoginRequest(BaseModel):
@@ -56,6 +57,10 @@ class ScanSummary(BaseModel):
     id: str
     original_url: str
     defanged_url: str
+    source_type: str
+    source_platform: str | None
+    source_sender: str | None
+    source_message_preview: str | None
     final_verdict: VerdictValue
     risk_score: int
     local_prediction: PredictionValue
@@ -99,6 +104,8 @@ class StatsResponse(BaseModel):
     dangerous: int
     unknown: int
     virustotal_failures: int
+    source_counts: dict[str, int]
+    telegram_risky: int
     comparison: ComparisonStats
 
 

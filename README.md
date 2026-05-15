@@ -177,6 +177,8 @@ More detailed notes live in `docs/`:
 - `docs/ui-testing-guide.md` explains how to manually test the UI.
 - `docs/virustotal.md` explains the VirusTotal integration.
 - `docs/security.md` explains local security decisions.
+- `docs/telegram-integration-architecture.md` explains the Telegram webhook design.
+- `docs/telegram-setup.md` explains Telegram bot setup and demo steps.
 - `docs/handoff-package.md` explains what to give to the colleague/commission.
 - `docs/code-reading-guide.md` gives a beginner-friendly reading order.
 - `docs/fresh-clone-test.md` records the clean-clone verification.

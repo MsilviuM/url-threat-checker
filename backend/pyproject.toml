@@ -35,6 +35,7 @@ reset-demo = "url_threat_checker.scripts.reset_demo:main"
 validate-virustotal = "url_threat_checker.scripts.validate_virustotal:main"
 create-submission-bundle = "url_threat_checker.scripts.create_submission_bundle:main"
 setup-2fa = "url_threat_checker.scripts.setup_2fa:main"
+telegram-webhook = "url_threat_checker.telegram.manage:main"
 
 [tool.uv]
 package = true

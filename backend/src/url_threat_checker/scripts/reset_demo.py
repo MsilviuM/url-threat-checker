@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from url_threat_checker.database import (
+    IntegrationEvent,
     ScanReport,
     SessionLocal,
     VirustotalCache,
@@ -88,6 +89,7 @@ def seed_demo_virustotal_cache(db: Session) -> None:
 
 
 def reset_demo_session(db: Session, with_comparison: bool = False) -> int:
+    db.query(IntegrationEvent).delete()
     db.query(ScanReport).delete()
     db.query(VirustotalCache).delete()
     db.commit()

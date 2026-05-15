@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Filter, Search } from "lucide-react";
 import { Panel } from "@/components/panel";
 import { VerdictBadge } from "@/components/verdict-badge";
-import { listScans, ScanSummary, Verdict } from "@/lib/api";
+import { listScans, ScanSource, ScanSummary, Verdict } from "@/lib/api";
 import { modelSignalWithConfidence } from "@/lib/predictions";
 
 const verdictOptions: Array<{ label: string; value: Verdict | "all" }> = [
@@ -16,16 +17,32 @@ const verdictOptions: Array<{ label: string; value: Verdict | "all" }> = [
   { label: "Unknown", value: "unknown" },
 ];
 
+const sourceOptions: Array<{ label: string; value: ScanSource }> = [
+  { label: "All sources", value: "all" },
+  { label: "Manual", value: "manual" },
+  { label: "Telegram", value: "telegram" },
+];
+
 export default function ReportsPage() {
+  return (
+    <Suspense fallback={<p className="text-sm ui-muted">Loading reports...</p>}>
+      <ReportsContent />
+    </Suspense>
+  );
+}
+
+function ReportsContent() {
+  const searchParams = useSearchParams();
   const [scans, setScans] = useState<ScanSummary[]>([]);
   const [verdict, setVerdict] = useState<Verdict | "all">("all");
+  const [source, setSource] = useState<ScanSource>(() => parseSource(searchParams.get("source")));
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    listScans({ verdict, query })
+    listScans({ verdict, query, source })
       .then((nextScans) => {
         if (active) {
           setScans(nextScans);
@@ -46,7 +63,7 @@ export default function ReportsPage() {
     return () => {
       active = false;
     };
-  }, [query, verdict]);
+  }, [query, source, verdict]);
 
   return (
     <Panel>
@@ -54,7 +71,7 @@ export default function ReportsPage() {
         <h1 className="text-2xl font-semibold ui-heading">Scan Reports</h1>
         <p className="mt-1 text-sm ui-muted">Stored URL checks and final verdicts.</p>
       </div>
-      <div className="mb-5 grid gap-3 md:grid-cols-[1fr_220px]">
+      <div className="mb-5 grid gap-3 md:grid-cols-[1fr_190px_190px]">
         <label className="relative block text-sm font-medium ui-secondary">
           <Search className="pointer-events-none absolute left-3 top-9 size-4 text-[var(--text-muted)]" />
           Search
@@ -82,6 +99,20 @@ export default function ReportsPage() {
             ))}
           </select>
         </label>
+        <label className="block text-sm font-medium ui-secondary">
+          Source
+          <select
+            className="focus-ring ui-input mt-1 rounded-md px-3 py-2"
+            value={source}
+            onChange={(event) => setSource(event.target.value as ScanSource)}
+          >
+            {sourceOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       {error ? <p className="ui-alert rounded-md px-3 py-2 text-sm">{error}</p> : null}
       {loading ? <p className="text-sm ui-muted">Loading reports...</p> : null}
@@ -92,10 +123,11 @@ export default function ReportsPage() {
       ) : null}
       {!loading && scans.length ? (
         <div className="overflow-x-auto">
-          <table className="ui-table min-w-[860px] text-sm">
+          <table className="ui-table min-w-[960px] text-sm">
             <thead>
               <tr>
                 <th className="py-2">URL</th>
+                <th className="py-2">Source</th>
                 <th className="py-2">Verdict</th>
                 <th className="py-2">Risk</th>
                 <th className="py-2">Model signal</th>
@@ -108,6 +140,7 @@ export default function ReportsPage() {
               {scans.map((scan) => (
                 <tr key={scan.id}>
                   <td className="max-w-sm truncate py-3 font-mono text-xs">{scan.defanged_url}</td>
+                  <td className="py-3">{formatSource(scan)}</td>
                   <td className="py-3"><VerdictBadge verdict={scan.final_verdict} /></td>
                   <td className="py-3">{scan.risk_score}</td>
                   <td className="py-3">
@@ -128,4 +161,21 @@ export default function ReportsPage() {
       ) : null}
     </Panel>
   );
+}
+
+function formatSource(scan: ScanSummary): string {
+  if (scan.source_platform === "telegram") {
+    return "Telegram";
+  }
+  if (scan.source_type === "automation") {
+    return "Automation";
+  }
+  return "Manual";
+}
+
+function parseSource(value: string | null): ScanSource {
+  if (value === "manual" || value === "telegram" || value === "automation") {
+    return value;
+  }
+  return "all";
 }

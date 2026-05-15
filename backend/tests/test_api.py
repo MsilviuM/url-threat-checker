@@ -466,7 +466,10 @@ def test_invalid_totp_secret_returns_503() -> None:
         totp_secret="not-valid-base32!!!",
     )
     with api_client_context(bad) as (client, _):
-        login = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"username": "admin", "password": "admin123"},
+        )
         verify = client.post("/api/v1/auth/verify-2fa", json={"code": "000000"})
     # Login still succeeds with the password (returns pending), but verify-2fa
     # bails with 503 because the secret is unusable.
@@ -482,9 +485,11 @@ def test_audit_log_emitted_on_failed_login(caplog) -> None:
     prev_propagate = pkg_logger.propagate
     pkg_logger.propagate = True
     try:
-        with caplog.at_level(logging.WARNING, logger="url_threat_checker.auth"):
-            with api_client_context() as (client, _):
-                client.post("/api/v1/auth/login", json={"username": "admin", "password": "wrong"})
+        with (
+            caplog.at_level(logging.WARNING, logger="url_threat_checker.auth"),
+            api_client_context() as (client, _),
+        ):
+            client.post("/api/v1/auth/login", json={"username": "admin", "password": "wrong"})
         records = [r for r in caplog.records if r.name == "url_threat_checker.auth"]
     finally:
         pkg_logger.propagate = prev_propagate
@@ -622,4 +627,3 @@ def test_change_password_rate_limited() -> None:
             json={"current_password": "wrong", "new_password": "doesntmatter"},
         )
     assert sixth.status_code == 429
-

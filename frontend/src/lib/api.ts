@@ -1,10 +1,15 @@
 export type Verdict = "safe" | "suspicious" | "dangerous" | "unknown";
 export type Prediction = "benign" | "phishing" | "malware" | "defacement" | "unknown";
+export type ScanSource = "all" | "manual" | "telegram" | "automation";
 
 export type ScanSummary = {
   id: string;
   original_url: string;
   defanged_url: string;
+  source_type: string;
+  source_platform: string | null;
+  source_sender: string | null;
+  source_message_preview: string | null;
   final_verdict: Verdict;
   risk_score: number;
   local_prediction: Prediction;
@@ -36,6 +41,8 @@ export type Stats = {
   dangerous: number;
   unknown: number;
   virustotal_failures: number;
+  source_counts: Record<string, number>;
+  telegram_risky: number;
   comparison: ComparisonStats;
 };
 
@@ -193,10 +200,15 @@ export async function createScan(url: string, includeVirustotal: boolean) {
   });
 }
 
-export async function listScans(filters: { verdict?: Verdict | "all"; query?: string } = {}) {
+export async function listScans(
+  filters: { verdict?: Verdict | "all"; query?: string; source?: ScanSource } = {},
+) {
   const params = new URLSearchParams({ limit: "100" });
   if (filters.verdict && filters.verdict !== "all") {
     params.set("verdict", filters.verdict);
+  }
+  if (filters.source && filters.source !== "all") {
+    params.set("source", filters.source);
   }
   if (filters.query?.trim()) {
     params.set("q", filters.query.trim());

@@ -432,7 +432,11 @@ def login(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> LoginResponse:
     password_hash = _get_password_hash(db, settings)
-    if payload.username != settings.admin_username or not verify_password(payload.password, password_hash):
+    valid_login = payload.username == settings.admin_username and verify_password(
+        payload.password,
+        password_hash,
+    )
+    if not valid_login:
         _audit(request, "login", "failure_invalid_credentials", payload.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

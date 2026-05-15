@@ -11,7 +11,7 @@ import sys
 import pyotp
 import qrcode
 
-from url_threat_checker.auth import _generate_recovery_codes, _count_recovery_codes
+from url_threat_checker.auth import _count_recovery_codes, _generate_recovery_codes
 from url_threat_checker.config import get_settings
 from url_threat_checker.database import SessionLocal, initialize_database
 

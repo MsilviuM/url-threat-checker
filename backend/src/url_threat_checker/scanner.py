@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -30,22 +31,39 @@ class ScanValidationError(ValueError):
     pass
 
 
+@dataclass(frozen=True)
+class ScanSource:
+    source_type: str = "manual"
+    source_platform: str | None = None
+    source_sender: str | None = None
+    source_message_preview: str | None = None
+
+
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def create_scan(db: Session, url: str, include_virustotal: bool) -> ScanReport:
+def create_scan(
+    db: Session,
+    url: str,
+    include_virustotal: bool,
+    source: ScanSource | None = None,
+) -> ScanReport:
     try:
         parsed, features = extract_features(url)
     except UrlParsingError as exc:
         raise ScanValidationError(str(exc)) from exc
 
+    source = source or ScanSource()
     prediction = get_predictor().predict(features)
     vt = VirustotalClient().lookup(db, parsed.normalized_url, include_virustotal)
     verdict = build_verdict(parsed, features, prediction, vt.malicious, vt.suspicious)
 
     report = ScanReport(
-        source_type="manual",
+        source_type=source.source_type,
+        source_platform=source.source_platform,
+        source_sender=source.source_sender,
+        source_message_preview=source.source_message_preview,
         original_url=parsed.original_url,
         normalized_url=parsed.normalized_url,
         url_hash=sha256_text(parsed.normalized_url),
@@ -77,6 +95,10 @@ def scan_summary(report: ScanReport) -> ScanSummary:
         id=report.id,
         original_url=report.original_url,
         defanged_url=report.defanged_url,
+        source_type=report.source_type,
+        source_platform=report.source_platform,
+        source_sender=report.source_sender,
+        source_message_preview=report.source_message_preview,
         final_verdict=report.final_verdict,
         risk_score=report.risk_score,
         local_prediction=report.local_prediction,
@@ -184,10 +206,17 @@ def list_scans(
     limit: int = 50,
     verdict: str | None = None,
     query: str | None = None,
+    source: str | None = None,
 ) -> list[ScanReport]:
     stmt = select(ScanReport).order_by(desc(ScanReport.created_at)).limit(limit)
     if verdict:
         stmt = stmt.where(ScanReport.final_verdict == verdict)
+    if source == "manual":
+        stmt = stmt.where(ScanReport.source_type == "manual")
+    elif source == "telegram":
+        stmt = stmt.where(ScanReport.source_platform == "telegram")
+    elif source == "automation":
+        stmt = stmt.where(ScanReport.source_type == "automation")
     if query:
         pattern = f"%{query.strip()}%"
         stmt = stmt.where(
@@ -196,6 +225,7 @@ def list_scans(
                 ScanReport.defanged_url.ilike(pattern),
                 ScanReport.domain.ilike(pattern),
                 ScanReport.registered_domain.ilike(pattern),
+                ScanReport.source_sender.ilike(pattern),
             )
         )
     return list(db.scalars(stmt))
@@ -269,6 +299,28 @@ def scan_stats(db: Session) -> dict:
     ).all()
     counts = {verdict: count for verdict, count in rows}
     failed_vt_statuses = {"failed", "rate_limited", "malformed_response"}
+    source_rows = db.execute(
+        select(ScanReport.source_type, ScanReport.source_platform, func.count()).group_by(
+            ScanReport.source_type,
+            ScanReport.source_platform,
+        )
+    ).all()
+    source_counts: dict[str, int] = {}
+    for source_type, source_platform, count in source_rows:
+        key = source_platform or source_type or "unknown"
+        source_counts[key] = source_counts.get(key, 0) + count
+
+    telegram_risky = (
+        db.scalar(
+            select(func.count())
+            .select_from(ScanReport)
+            .where(
+                ScanReport.source_platform == "telegram",
+                ScanReport.final_verdict.in_({"suspicious", "dangerous"}),
+            )
+        )
+        or 0
+    )
     virustotal_failures = (
         db.scalar(
             select(func.count())
@@ -284,6 +336,8 @@ def scan_stats(db: Session) -> dict:
         "dangerous": counts.get("dangerous", 0),
         "unknown": counts.get("unknown", 0),
         "virustotal_failures": virustotal_failures,
+        "source_counts": source_counts,
+        "telegram_risky": telegram_risky,
         "comparison": comparison_stats(list(db.scalars(select(ScanReport)))),
     }
 
@@ -309,8 +363,9 @@ def scans_index(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     verdict: Annotated[str | None, Query(pattern="^(safe|suspicious|dangerous|unknown)$")] = None,
     q: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
+    source: Annotated[str | None, Query(pattern="^(manual|telegram|automation)$")] = None,
 ) -> list[ScanSummary]:
-    return [scan_summary(report) for report in list_scans(db, limit, verdict, q)]
+    return [scan_summary(report) for report in list_scans(db, limit, verdict, q, source)]
 
 
 @router.get("/scans/{scan_id}", response_model=ScanReportResponse)

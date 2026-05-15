@@ -47,6 +47,17 @@ class Settings(BaseSettings):
     virustotal_submit_unknown: bool = False
     virustotal_base_url: str = "https://www.virustotal.com/api/v3"
 
+    telegram_bot_token: str | None = None
+    telegram_webhook_secret: str | None = None
+    telegram_webhook_path_token: str | None = None
+    telegram_public_base_url: str | None = None
+    telegram_frontend_base_url: str = "http://localhost:3000"
+    telegram_include_virustotal: bool = True
+    telegram_reply_mode: str = "risky_and_private"
+    telegram_max_urls_per_message: int = Field(default=5, ge=1, le=20)
+    telegram_message_preview_chars: int = Field(default=240, ge=40, le=1000)
+    telegram_api_base_url: str = "https://api.telegram.org"
+
     max_request_body_bytes: int = Field(default=65_536, ge=1024, le=1_000_000)
 
     @property

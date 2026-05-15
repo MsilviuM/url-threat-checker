@@ -10,6 +10,7 @@ import {
   Code2,
   Copy,
   Link2,
+  MessageCircle,
   ShieldCheck,
   ShieldX,
 } from "lucide-react";
@@ -180,6 +181,16 @@ export default function ReportDetailPage() {
         <div className="space-y-5">
           <Panel>
             <div className="mb-4 flex items-center gap-2">
+              <MessageCircle className="size-5 text-[var(--text-secondary)]" />
+              <h2 className="text-xl font-semibold ui-heading">Source</h2>
+            </div>
+            <Info label="Platform" value={formatSource(report)} />
+            <Info label="Sender" value={report.source_sender ?? "-"} />
+            <Info label="Message preview" value={report.source_message_preview ?? "-"} />
+          </Panel>
+
+          <Panel>
+            <div className="mb-4 flex items-center gap-2">
               <Activity className="size-5 text-[var(--text-secondary)]" />
               <h2 className="text-xl font-semibold ui-heading">Local ML Signals</h2>
             </div>
@@ -259,6 +270,16 @@ export default function ReportDetailPage() {
       </div>
     </div>
   );
+}
+
+function formatSource(report: ScanReport): string {
+  if (report.source_platform === "telegram") {
+    return "Telegram";
+  }
+  if (report.source_type === "automation") {
+    return "Automation";
+  }
+  return "Manual";
 }
 
 function fallbackVerdictExplanation(report: ScanReport): string[] {
