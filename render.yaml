@@ -3,7 +3,7 @@ services:
     name: url-threat-checker-backend
     runtime: python
     plan: free
-    buildCommand: pip install uv && cd backend && uv sync --no-dev
+    buildCommand: pip install uv && cd backend && UV_PYTHON_DOWNLOADS=automatic uv python install 3.13 && uv sync --no-dev
     startCommand: cd backend && uv run uvicorn url_threat_checker.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
